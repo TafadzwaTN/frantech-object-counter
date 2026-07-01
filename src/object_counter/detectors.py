@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import re
 from abc import ABC, abstractmethod
 from pathlib import Path
 
@@ -10,6 +11,17 @@ from PIL import Image
 
 from .config import AppConfig
 from .detections import Detection
+
+
+ALL_CLASSES = "All classes"
+
+
+def normalize_label(label: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", label.lower())
+
+
+def naturalize_label(label: str) -> str:
+    return re.sub(r"[-_]+", " ", label).strip()
 
 
 class Detector(ABC):
@@ -30,6 +42,9 @@ class YoloDetector(Detector):
 
         self.model = YOLO(str(weights_path))
         self.confidence = confidence
+        self.class_names = [
+            str(name) for _, name in sorted(self.model.names.items(), key=lambda item: item[0])
+        ]
 
     def detect(self, frame_bgr, target_class: str) -> list[Detection]:
         results = self.model.predict(frame_bgr, conf=self.confidence, verbose=False)
@@ -40,12 +55,14 @@ class YoloDetector(Detector):
         boxes = result.boxes
         names = result.names
         detections: list[Detection] = []
-        target_norm = target_class.strip().lower()
+        target = target_class.strip()
+        target_norm = normalize_label(target)
+        filter_all = target_norm in ("", normalize_label(ALL_CLASSES), "all")
 
         for box in boxes:
             cls_id = int(box.cls[0])
             label = str(names.get(cls_id, cls_id))
-            if target_norm and label.lower() != target_norm:
+            if not filter_all and normalize_label(label) != target_norm:
                 continue
             x1, y1, x2, y2 = [float(v) for v in box.xyxy[0].tolist()]
             score = float(box.conf[0])
@@ -122,7 +139,8 @@ class LocateAnythingDetector(Detector):
     def detect(self, frame_bgr, target_class: str) -> list[Detection]:
         frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
         image = Image.fromarray(frame_rgb)
-        result = self.worker.detect(image, [target_class], verbose=False)
+        prompt_label = naturalize_label(target_class)
+        result = self.worker.detect(image, [prompt_label], verbose=False)
         boxes = self.worker_cls.parse_boxes(result["answer"], image.width, image.height)
         return [
             Detection(
@@ -130,12 +148,21 @@ class LocateAnythingDetector(Detector):
                 y1=float(box["y1"]),
                 x2=float(box["x2"]),
                 y2=float(box["y2"]),
-                label=target_class,
+                label=prompt_label,
                 score=None,
                 detector=self.name,
             )
             for box in boxes
         ]
+
+
+def load_yolo_class_names(weights_path: Path) -> list[str]:
+    if not weights_path.exists():
+        raise FileNotFoundError(f"YOLO weights not found: {weights_path}")
+    from ultralytics import YOLO
+
+    model = YOLO(str(weights_path))
+    return [str(name) for _, name in sorted(model.names.items(), key=lambda item: item[0])]
 
 
 def load_detector(kind: str, config: AppConfig, yolo_confidence: float = 0.25) -> Detector:

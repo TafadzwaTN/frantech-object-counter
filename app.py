@@ -15,7 +15,8 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from object_counter.config import AppConfig, load_config
 from object_counter.counting import Line, ObjectCounter, Rect
-from object_counter.detectors import load_detector
+from object_counter.detections import Detection, TrackedDetection
+from object_counter.detectors import ALL_CLASSES, load_detector, load_yolo_class_names
 from object_counter.drawing import draw_overlay
 from object_counter.storage import SessionStorage
 from object_counter.tracking import ByteTrackTracker
@@ -105,12 +106,33 @@ def _cached_detector(
 
 def _default_target(detector_kind: str) -> str:
     if detector_kind == "YOLO":
-        return "Arduino-Uno"
+        return ALL_CLASSES
     return "Arduino Uno"
 
 
 def _default_detector_index() -> int:
     return 0 if torch.cuda.is_available() else 1
+
+
+@st.cache_resource(show_spinner=False)
+def _cached_yolo_class_names(yolo_weights_path: str) -> list[str]:
+    return load_yolo_class_names(Path(yolo_weights_path))
+
+
+def _preview_tracks(detections: list[Detection]) -> list[TrackedDetection]:
+    return [
+        TrackedDetection(
+            x1=det.x1,
+            y1=det.y1,
+            x2=det.x2,
+            y2=det.y2,
+            label=det.label,
+            score=det.score,
+            detector=det.detector,
+            track_id=index + 1,
+        )
+        for index, det in enumerate(detections)
+    ]
 
 
 def main():
@@ -130,7 +152,23 @@ def main():
                 "This environment has CPU-only PyTorch. LocateAnything may be "
                 "very slow unless you install a CUDA-enabled PyTorch build."
             )
-        target_class = st.text_input("Target class", value=_default_target(detector_kind))
+        if detector_kind == "YOLO":
+            try:
+                yolo_classes = _cached_yolo_class_names(str(config.yolo_weights_path))
+                target_options = [ALL_CLASSES, *yolo_classes]
+                target_class = st.selectbox("Target class", target_options, index=0)
+                if len(yolo_classes) == 80 and "Arduino-Uno" not in yolo_classes:
+                    st.warning(
+                        "The selected YOLO weights look like a generic COCO model, "
+                        "not the 61-class electronics model."
+                    )
+            except Exception as exc:
+                st.error(f"Could not read YOLO classes: {exc}")
+                target_class = st.text_input(
+                    "Target class", value=_default_target(detector_kind)
+                )
+        else:
+            target_class = st.text_input("Target description", value=_default_target(detector_kind))
         source_raw = st.text_input("Video source", value="0")
         count_mode = st.radio("Counting mode", ["Line crossing", "Zone entry"], horizontal=True)
         direction = st.selectbox(
@@ -185,6 +223,49 @@ def main():
                     zone = _extract_rect(obj, scale_x, scale_y)
                     if zone is not None:
                         st.session_state.zone = zone
+
+            if st.button("Test detector on calibration frame", use_container_width=True):
+                try:
+                    detector = _cached_detector(
+                        detector_kind,
+                        str(config.locateanything_root),
+                        config.locateanything_model_path,
+                        config.locateanything_device,
+                        str(config.yolo_weights_path),
+                        yolo_confidence,
+                    )
+                    detections = detector.detect(
+                        st.session_state.calibration_frame,
+                        target_class.strip(),
+                    )
+                    preview_tracks = _preview_tracks(detections)
+                    annotated = draw_overlay(
+                        st.session_state.calibration_frame,
+                        preview_tracks,
+                        len(detections),
+                        "Detections",
+                        line=st.session_state.line if count_mode == "Line crossing" else None,
+                        zone=st.session_state.zone if count_mode == "Zone entry" else None,
+                    )
+                    st.image(_as_rgb_image(annotated), channels="RGB", use_column_width=True)
+                    st.write(f"Detections found: {len(detections)}")
+                    if detections:
+                        st.dataframe(
+                            [
+                                {
+                                    "label": det.label,
+                                    "score": det.score,
+                                    "x1": round(det.x1, 1),
+                                    "y1": round(det.y1, 1),
+                                    "x2": round(det.x2, 1),
+                                    "y2": round(det.y2, 1),
+                                }
+                                for det in detections
+                            ],
+                            use_container_width=True,
+                        )
+                except Exception as exc:
+                    st.error(f"Detector test failed: {exc}")
 
         calibration_ready = (
             st.session_state.line is not None

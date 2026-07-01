@@ -17,10 +17,10 @@ Copy-Item .env.example .env
 Edit `.env` if your model paths differ:
 
 ```text
-LOCATEANYTHING_ROOT="C:\Users\Frantech Tafadzwa\Machine Learning (ML)\eagle\Embodied"
+LOCATEANYTHING_ROOT=C:/Users/Frantech Tafadzwa/Machine Learning (ML)/eagle/Embodied
 LOCATEANYTHING_MODEL_PATH=nvidia/LocateAnything-3B
 LOCATEANYTHING_DEVICE=auto
-YOLO_WEIGHTS_PATH="C:\Users\Frantech Tafadzwa\Machine Learning (ML)\Counter ML\yolo26n.pt"
+YOLO_WEIGHTS_PATH=C:/Users/Frantech Tafadzwa/Machine Learning (ML)/rf-detr/runs/detect/train-7/weights/best.pt
 ```
 
 `LOCATEANYTHING_DEVICE=auto` uses CUDA only when the installed PyTorch build supports it. If you see a CPU-only torch build, YOLO will still run, but LocateAnything will be very slow on CPU.
@@ -44,11 +44,12 @@ Default video source is webcam index `0`. RTSP feeds can be entered in the same 
 ## Workflow
 
 1. Select a detector.
-2. Enter one target class.
+2. Select one YOLO target class, `All classes`, or enter one LocateAnything target description.
 3. Choose `Line crossing` or `Zone entry`.
 4. Capture a calibration frame.
-5. Draw the line or zone on the snapshot.
-6. Start counting.
+5. Use `Test detector on calibration frame` to confirm boxes are visible.
+6. Draw the line or zone on the snapshot.
+7. Start counting.
 
 Events are saved under `sessions/<session-id>/events.csv`. If snapshots are enabled, event frames are saved under `sessions/<session-id>/snapshots/`.
 
