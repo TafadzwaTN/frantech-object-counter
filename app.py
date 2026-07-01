@@ -20,13 +20,27 @@ from object_counter.detectors import ALL_CLASSES, load_detector, load_yolo_class
 from object_counter.drawing import draw_overlay
 from object_counter.storage import SessionStorage
 from object_counter.tracking import ByteTrackTracker
-from object_counter.video import capture_one_frame, parse_video_source
+from object_counter.video import (
+    apply_frame_rotation,
+    capture_one_frame,
+    parse_video_source,
+    resolve_frame_rotation,
+)
 
 
 try:
     from streamlit_drawable_canvas import st_canvas
 except ImportError:  # pragma: no cover - Streamlit shows the actionable message.
     st_canvas = None
+
+
+ROTATION_OPTIONS = {
+    "Auto": "auto",
+    "0°": "0",
+    "90° clockwise": "90",
+    "180°": "180",
+    "270° clockwise": "270",
+}
 
 
 def _as_rgb_image(frame_bgr):
@@ -99,9 +113,20 @@ def _cached_detector(
         locateanything_model_path=locateanything_model_path,
         locateanything_device=locateanything_device,
         yolo_weights_path=Path(yolo_weights_path),
+        frame_rotation_degrees="0",
         sessions_dir=ROOT / "sessions",
     )
     return load_detector(kind, config, yolo_confidence=yolo_confidence)
+
+
+def _rotation_index(setting: str) -> int:
+    value = str(setting).strip().lower()
+    if value in ("", "auto"):
+        return 0
+    for index, option_value in enumerate(ROTATION_OPTIONS.values()):
+        if option_value == value:
+            return index
+    return 0
 
 
 def _default_target(detector_kind: str) -> str:
@@ -170,6 +195,21 @@ def main():
         else:
             target_class = st.text_input("Target description", value=_default_target(detector_kind))
         source_raw = st.text_input("Video source", value="0")
+        rotation_label = st.selectbox(
+            "Frame rotation",
+            list(ROTATION_OPTIONS.keys()),
+            index=_rotation_index(config.frame_rotation_degrees),
+            help="Auto keeps webcams unrotated and applies a +90° clockwise correction to RTSP feeds.",
+        )
+        try:
+            rotation_degrees = resolve_frame_rotation(
+                source_raw,
+                ROTATION_OPTIONS[rotation_label],
+            )
+        except ValueError as exc:
+            st.error(str(exc))
+            rotation_degrees = 0
+        st.caption(f"Effective rotation: {rotation_degrees}° clockwise")
         count_mode = st.radio("Counting mode", ["Line crossing", "Zone entry"], horizontal=True)
         direction = st.selectbox(
             "Line direction",
@@ -191,7 +231,7 @@ def main():
 
     with left:
         if st.button("Capture calibration frame", use_container_width=True):
-            ok, frame, error = capture_one_frame(source_raw)
+            ok, frame, error = capture_one_frame(source_raw, rotation_degrees)
             if ok:
                 st.session_state.calibration_frame = frame
             else:
@@ -283,6 +323,8 @@ def main():
                     f"LOCATEANYTHING_MODEL_PATH={config.locateanything_model_path}",
                     f"LOCATEANYTHING_DEVICE={config.locateanything_device}",
                     f"YOLO_WEIGHTS_PATH={config.yolo_weights_path}",
+                    f"FRAME_ROTATION_DEGREES={ROTATION_OPTIONS[rotation_label]}",
+                    f"EFFECTIVE_FRAME_ROTATION={rotation_degrees}",
                 ]
             )
         )
@@ -339,6 +381,7 @@ def main():
                 st.warning("Video source stopped returning frames.")
                 break
 
+            frame = apply_frame_rotation(frame, rotation_degrees)
             frame_count += 1
             detections = detector.detect(frame, target_class.strip())
             tracks = tracker.update(detections)

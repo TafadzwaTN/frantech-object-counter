@@ -21,9 +21,12 @@ LOCATEANYTHING_ROOT=C:/Users/Frantech Tafadzwa/Machine Learning (ML)/eagle/Embod
 LOCATEANYTHING_MODEL_PATH=nvidia/LocateAnything-3B
 LOCATEANYTHING_DEVICE=auto
 YOLO_WEIGHTS_PATH=C:/Users/Frantech Tafadzwa/Machine Learning (ML)/rf-detr/runs/detect/train-7/weights/best.pt
+FRAME_ROTATION_DEGREES=auto
 ```
 
 `LOCATEANYTHING_DEVICE=auto` uses CUDA only when the installed PyTorch build supports it. If you see a CPU-only torch build, YOLO will still run, but LocateAnything will be very slow on CPU.
+
+`FRAME_ROTATION_DEGREES=auto` keeps webcam feeds unrotated and applies a 90-degree clockwise correction for RTSP sources. Use the sidebar rotation control if a camera needs `0`, `90`, `180`, or `270`.
 
 Check the active PyTorch build with:
 

@@ -16,6 +16,7 @@ class AppConfig:
     locateanything_model_path: str
     locateanything_device: str
     yolo_weights_path: Path
+    frame_rotation_degrees: str
     sessions_dir: Path
 
 
@@ -39,5 +40,6 @@ def load_config() -> AppConfig:
                 r"C:\Users\Frantech Tafadzwa\Machine Learning (ML)\Counter ML\yolo26n.pt",
             )
         ),
+        frame_rotation_degrees=os.getenv("FRAME_ROTATION_DEGREES", "auto"),
         sessions_dir=PROJECT_ROOT / "sessions",
     )
