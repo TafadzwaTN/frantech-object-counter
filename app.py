@@ -278,7 +278,7 @@ def main():
                 recent_events = recent_events[:10]
 
             elapsed = max(time.perf_counter() - started_at, 1e-6)
-            preview.image(_as_rgb_image(annotated), channels="RGB", use_container_width=True)
+            preview.image(_as_rgb_image(annotated), channels="RGB", use_column_width=True)
             with metrics.container():
                 count_col, frames_col, fps_col = st.columns(3)
                 count_col.metric("Total count", counter.total)
