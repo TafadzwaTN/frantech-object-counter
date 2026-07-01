@@ -1,0 +1,9 @@
+streamlit>=1.36
+streamlit-drawable-canvas>=0.9.3
+opencv-python>=4.10
+numpy>=1.26
+pillow>=10.0
+python-dotenv>=1.0
+supervision>=0.22
+ultralytics>=8.3
+pytest>=8.2
