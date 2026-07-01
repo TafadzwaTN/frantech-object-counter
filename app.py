@@ -7,6 +7,7 @@ from pathlib import Path
 
 import cv2
 import streamlit as st
+import torch
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parent
@@ -88,12 +89,14 @@ def _cached_detector(
     kind: str,
     locateanything_root: str,
     locateanything_model_path: str,
+    locateanything_device: str,
     yolo_weights_path: str,
     yolo_confidence: float,
 ):
     config = AppConfig(
         locateanything_root=Path(locateanything_root),
         locateanything_model_path=locateanything_model_path,
+        locateanything_device=locateanything_device,
         yolo_weights_path=Path(yolo_weights_path),
         sessions_dir=ROOT / "sessions",
     )
@@ -106,6 +109,10 @@ def _default_target(detector_kind: str) -> str:
     return "Arduino Uno"
 
 
+def _default_detector_index() -> int:
+    return 0 if torch.cuda.is_available() else 1
+
+
 def main():
     st.set_page_config(page_title="Frantech Object Counter", layout="wide")
     config = load_config()
@@ -113,7 +120,16 @@ def main():
     st.title("Frantech Object Counter")
 
     with st.sidebar:
-        detector_kind = st.selectbox("Detector", ["LocateAnything", "YOLO"], index=0)
+        detector_kind = st.selectbox(
+            "Detector",
+            ["LocateAnything", "YOLO"],
+            index=_default_detector_index(),
+        )
+        if detector_kind == "LocateAnything" and not torch.cuda.is_available():
+            st.warning(
+                "This environment has CPU-only PyTorch. LocateAnything may be "
+                "very slow unless you install a CUDA-enabled PyTorch build."
+            )
         target_class = st.text_input("Target class", value=_default_target(detector_kind))
         source_raw = st.text_input("Video source", value="0")
         count_mode = st.radio("Counting mode", ["Line crossing", "Zone entry"], horizontal=True)
@@ -184,6 +200,7 @@ def main():
                 [
                     f"LOCATEANYTHING_ROOT={config.locateanything_root}",
                     f"LOCATEANYTHING_MODEL_PATH={config.locateanything_model_path}",
+                    f"LOCATEANYTHING_DEVICE={config.locateanything_device}",
                     f"YOLO_WEIGHTS_PATH={config.yolo_weights_path}",
                 ]
             )
@@ -217,6 +234,7 @@ def main():
             detector_kind,
             str(config.locateanything_root),
             config.locateanything_model_path,
+            config.locateanything_device,
             str(config.yolo_weights_path),
             yolo_confidence,
         )

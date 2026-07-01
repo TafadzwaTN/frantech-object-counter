@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 
 import cv2
+import torch
 from PIL import Image
 
 from .config import AppConfig
@@ -65,7 +66,7 @@ class YoloDetector(Detector):
 class LocateAnythingDetector(Detector):
     name = "LocateAnything"
 
-    def __init__(self, locateanything_root: Path, model_path: str):
+    def __init__(self, locateanything_root: Path, model_path: str, device: str = "auto"):
         if not locateanything_root.exists():
             raise FileNotFoundError(f"LocateAnything root not found: {locateanything_root}")
         root = str(locateanything_root)
@@ -83,8 +84,10 @@ class LocateAnythingDetector(Detector):
             ) from exc
 
         self.worker_cls = LocateAnythingWorker
+        self.device = self._resolve_device(device)
+        dtype = torch.bfloat16 if self.device == "cuda" else torch.float32
         try:
-            self.worker = LocateAnythingWorker(model_path)
+            self.worker = LocateAnythingWorker(model_path, device=self.device, dtype=dtype)
         except ModuleNotFoundError as exc:
             missing = exc.name or str(exc)
             raise ModuleNotFoundError(
@@ -92,6 +95,29 @@ class LocateAnythingDetector(Detector):
                 f"missing ({missing!r}). Run `pip install -r requirements.txt` "
                 "inside this project's virtual environment, then restart Streamlit."
             ) from exc
+        except AssertionError as exc:
+            if "Torch not compiled with CUDA enabled" in str(exc):
+                raise RuntimeError(
+                    "LocateAnything tried to use CUDA, but this virtual environment "
+                    "has a CPU-only PyTorch build. Set LOCATEANYTHING_DEVICE=cpu in "
+                    ".env, or install a CUDA-enabled PyTorch build and restart Streamlit."
+                ) from exc
+            raise
+
+    @staticmethod
+    def _resolve_device(device: str) -> str:
+        requested = device.strip().lower()
+        if requested in ("", "auto"):
+            return "cuda" if torch.cuda.is_available() else "cpu"
+        if requested == "cuda" and not torch.cuda.is_available():
+            raise RuntimeError(
+                "LOCATEANYTHING_DEVICE=cuda was requested, but this virtual "
+                "environment has a CPU-only PyTorch build. Install CUDA-enabled "
+                "PyTorch or set LOCATEANYTHING_DEVICE=cpu."
+            )
+        if requested not in ("cpu", "cuda"):
+            raise ValueError("LOCATEANYTHING_DEVICE must be 'auto', 'cuda', or 'cpu'.")
+        return requested
 
     def detect(self, frame_bgr, target_class: str) -> list[Detection]:
         frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
@@ -117,6 +143,8 @@ def load_detector(kind: str, config: AppConfig, yolo_confidence: float = 0.25) -
         return YoloDetector(config.yolo_weights_path, confidence=yolo_confidence)
     if kind == "LocateAnything":
         return LocateAnythingDetector(
-            config.locateanything_root, config.locateanything_model_path
+            config.locateanything_root,
+            config.locateanything_model_path,
+            device=config.locateanything_device,
         )
     raise ValueError(f"Unsupported detector kind: {kind}")

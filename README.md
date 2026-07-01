@@ -19,8 +19,19 @@ Edit `.env` if your model paths differ:
 ```text
 LOCATEANYTHING_ROOT="C:\Users\Frantech Tafadzwa\Machine Learning (ML)\eagle\Embodied"
 LOCATEANYTHING_MODEL_PATH=nvidia/LocateAnything-3B
+LOCATEANYTHING_DEVICE=auto
 YOLO_WEIGHTS_PATH="C:\Users\Frantech Tafadzwa\Machine Learning (ML)\Counter ML\yolo26n.pt"
 ```
+
+`LOCATEANYTHING_DEVICE=auto` uses CUDA only when the installed PyTorch build supports it. If you see a CPU-only torch build, YOLO will still run, but LocateAnything will be very slow on CPU.
+
+Check the active PyTorch build with:
+
+```powershell
+.\.venv\Scripts\python.exe -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+```
+
+If it prints `+cpu` or `False`, install a CUDA-enabled PyTorch build before serious LocateAnything testing, then restart Streamlit.
 
 ## Run
 

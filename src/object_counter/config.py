@@ -14,6 +14,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 class AppConfig:
     locateanything_root: Path
     locateanything_model_path: str
+    locateanything_device: str
     yolo_weights_path: Path
     sessions_dir: Path
 
@@ -31,6 +32,7 @@ def load_config() -> AppConfig:
         locateanything_model_path=os.getenv(
             "LOCATEANYTHING_MODEL_PATH", "nvidia/LocateAnything-3B"
         ),
+        locateanything_device=os.getenv("LOCATEANYTHING_DEVICE", "auto"),
         yolo_weights_path=Path(
             os.getenv(
                 "YOLO_WEIGHTS_PATH",
