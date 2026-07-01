@@ -72,10 +72,26 @@ class LocateAnythingDetector(Detector):
         if root not in sys.path:
             sys.path.insert(0, root)
 
-        from locateanything_worker import LocateAnythingWorker
+        try:
+            from locateanything_worker import LocateAnythingWorker
+        except ModuleNotFoundError as exc:
+            missing = exc.name or str(exc)
+            raise ModuleNotFoundError(
+                "LocateAnything is missing a Python dependency "
+                f"({missing!r}). Run `pip install -r requirements.txt` inside "
+                "this project's virtual environment, then restart Streamlit."
+            ) from exc
 
         self.worker_cls = LocateAnythingWorker
-        self.worker = LocateAnythingWorker(model_path)
+        try:
+            self.worker = LocateAnythingWorker(model_path)
+        except ModuleNotFoundError as exc:
+            missing = exc.name or str(exc)
+            raise ModuleNotFoundError(
+                "LocateAnything could not load because a model dependency is "
+                f"missing ({missing!r}). Run `pip install -r requirements.txt` "
+                "inside this project's virtual environment, then restart Streamlit."
+            ) from exc
 
     def detect(self, frame_bgr, target_class: str) -> list[Detection]:
         frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)

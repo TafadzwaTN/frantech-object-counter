@@ -12,6 +12,8 @@ pip install -r requirements.txt
 Copy-Item .env.example .env
 ```
 
+`requirements.txt` includes the app, YOLO, and LocateAnything adapter dependencies. The LocateAnything model itself still stays outside this repo.
+
 Edit `.env` if your model paths differ:
 
 ```text
